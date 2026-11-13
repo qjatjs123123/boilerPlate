@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "app-backend"
+version = "0.1.0"
+description = "FastAPI backend (vibe-harness template)"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.12.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.1.0",
+    "python-multipart>=0.0.6",
+    "email-validator>=2.1.0",
+    "psycopg2-binary>=2.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.24",
+    "pytest-cov>=4.1",
+    "taskipy>=1.12.0",
+    "ruff>=0.6",
+    "pyyaml>=6.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# B008(함수 호출 기본값) 은 켠다 — 의존성은 Annotated 로만 주입 (`service: X = Depends(...)` 금지, router-layer.md)
+
+
+[tool.taskipy.tasks]
+dev = "uvicorn app.main:app --reload --port 8000"
+test = "pytest"
+lint = "ruff check . && ruff format --check ."
+export-docs = "python scripts/export_openapi.py"

@@ -1,0 +1,27 @@
+# 데이터 모델 — DB 테이블 설계의 단일 출처
+#
+# - 테이블을 추가·변경할 때는 이 파일을 먼저 고치고, models.py 를 이 파일과 똑같이 만든다.
+# - tests/architecture/test_schema.py 가 이 파일과 실제 모델(Base.metadata)을 1:1 비교하고 정규화 규칙을 검사한다.
+# - 작성 절차·규칙: .claude/skills/backend/db-design/SKILL.md, .claude/rules/backend/db-design.md
+#
+# 컬럼 속성 (생략 시 기본값)
+#   type          integer | biginteger | string | text | boolean | datetime | date | decimal | float | enum
+#   length        string 길이 (string 필수)
+#   values        enum 값 목록 (enum 필수)
+#   primary_key   false
+#   nullable      true (primary_key 면 false)
+#   unique        false
+#   index         false
+#   foreign_key   "테이블.컬럼"
+#   ondelete      CASCADE | SET NULL | RESTRICT (foreign_key 면 필수)
+#   denormalized  비정규화 사유 문장 (카운터 캐시만 허용)
+#
+# 테이블 속성
+#   description         이 테이블이 저장하는 것 (필수)
+#   association         true 면 N:M 연결 테이블 (복합 PK·타임스탬프 생략 허용)
+#   unique_constraints  {uq_이름: [컬럼, ...]}
+#   distinct_from       {비슷한_테이블: "따로 두는 사유"} — schema-similar-tables 검사가 잡은 쌍을 의도적으로 분리할 때만
+#
+# 이 파일을 고치면 함께 갱신: docs/backend/DOMAIN-MAP.md (개념 지도), docs/backend/ERD.md (scripts/gen_erd.py 로 생성)
+
+tables: {}

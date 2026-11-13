@@ -1,0 +1,83 @@
+---
+name: backend-spec-run
+description: spec/backend 문서의 Task를 테스트 게이트(pytest)와 함께 순서대로 구현·커밋하고 마지막에 backend/refactor를 적용 모드로 실행하는 절차.
+---
+
+# backend/spec-run — spec 문서 실행기 (테스트 게이트)
+
+> 절차 스킬 — 슬래시 커맨드가 아니다. 표기법·vibe-build 모드·커밋 절차·spec 번호 규칙은 **`.claude/skills/COMMON.md` 를 먼저 읽고** 따른다.
+
+> **vibe-build 모드** — 공통 규칙은 `COMMON.md` §2 (메인에서는 커밋 없음 · 워크트리는 Task별 커밋 · 중간 확인 없음). 이 스킬만의 차이: 3️⃣ 리팩토링을 하지 않고(10단계), Task "검증" 의 `backend/verify` 를 실행하지 않는다(11단계) — Task 는 구현 + pytest·마이그레이션 검증까지. 상태·체크박스·진행 로그 갱신과 커밋은 §2 대로(워크트리는 보고로 넘김).
+
+`spec/backend/` 폴더의 backend spec 문서를 읽고, **문서에 적힌 그대로** 미체크 Task를 순서대로 실행한다.
+이 스킬은 spec에 없는 작업을 추가하지 않는다 — 무엇을 만들고, 어떤 테스트를 돌리고, 어떤 메시지로 커밋할지는 전부 spec 문서가 정의하며, run은 그것을 수행하는 실행기다.
+**유일한 추가 단계는 모든 Task 통과 후의 `backend/refactor` 1회다.** *(vibe-build 모드에서는 맨 위 「vibe-build 모드」 문단이 우선)*
+
+## 입력 형태
+
+```
+backend/spec-run <spec 파일명 또는 번호>          # 모든 미완료 Task를 끝까지 순차 실행 (기본)
+backend/spec-run <spec 파일명 또는 번호> --one    # 다음 미완료 Task 1개만 실행하고 종료
+backend/spec-run                                  # 진행중인 spec 목록을 보여주고 선택
+```
+
+입력: 이 스킬을 따르라고 지시한 쪽이 넘겨준 내용 (위 형태 중 하나)
+
+번호만 입력해도 된다 — `backend/spec-run 001` → `spec/backend/001-*.md` 매칭.
+
+---
+
+## 실행 절차
+
+### 1️⃣ spec 로드
+
+- spec 파일 **전체**를 읽는다 (요구사항·설계 개요·범위 제외 포함 — Task 목록만 읽고 시작하지 않는다).
+- **열린 질문이 남아 있으면 멈추고 사용자에게 질문한다.** 해소 전 구현 시작 금지.
+- **테이블 추가·변경 spec 인데 "설계 검증: db-design-reviewer PASS" 기록이 없으면 멈춘다** — `backend/spec-create` 의 2️⃣-B 를 먼저 수행.
+- 상태가 `📝 계획됨`이면 `🚧 진행중`으로 갱신 (spec 문서와 `spec/README.md` 색인의 해당 줄 둘 다). *(vibe-build 모드에서는 맨 위 「vibe-build 모드」 문단이 우선)*
+- 첫 번째 미체크 Task를 찾는다. 전부 체크돼 있으면 3️⃣(리팩토링)으로 간다.
+
+### 2️⃣ Task 실행 — spec 문서 그대로
+
+첫 미체크 Task부터 순서대로(건너뛰기 금지), 각 Task에 적힌 필드를 **그대로** 수행한다. 호출한 쪽이 **묶음**(`COMMON.md` §5)을 지정했으면 그 묶음의 Task 만 대상으로 하고, 순서 규칙도 그 묶음 안에서 적용한다 — 다른 묶음의 Task 는 다른 도우미 몫이니 건드리지 않는다:
+
+1. **구현**: "작업"·"파일" 항목에 적힌 것만. 범위 밖 변경이 필요해지면 구현하지 말고 spec 수정을 먼저 제안한다.
+   - **models Task**: spec "데이터 모델" 블록을 `backend/data-model.yaml` 에 그대로 반영한 뒤, models.py 를 그 yaml 과 **똑같이** 작성한다(`.claude/rules/backend/db-design.md`). 이어서 `docs/backend/DOMAIN-MAP.md` 에 새 개념 행(또는 저장 위치 변경)을 반영하고 `backend/.venv/bin/python backend/scripts/gen_erd.py` 로 ERD 를 다시 만든다. 구현 중 설계를 바꿔야 하면 models.py 를 먼저 바꾸지 말고 spec 블록 → reviewer 재통과 → yaml 순으로 고친다.
+2. **테스트·검증**: "테스트" 항목의 pytest 코드를 작성하고, "실행" 명령과 "검증" 항목(마이그레이션·`backend/verify` 포함 — spec에 적힌 것만)을 그대로 실행한다. *(vibe-build 모드에서는 맨 위 「vibe-build 모드」 문단이 우선 — `backend/verify` 는 11단계)* 파일 경로에 해당하는 `.claude/rules/backend/*.md`의 레이어 규칙을 따른다.
+3. **에러 수정 루프**: 테스트·검증 중 에러가 발생하면 루프를 돈다 — ① 실패 로그·스택을 읽고 원인을 분석 → ② 다음 루프에서 원인 코드를 수정 → ③ 같은 명령을 재실행. **통과할 때까지 반복**하되, 같은 에러가 **3회 연속** 해결되지 않으면 체크·커밋 없이 진행 로그에 사유를 기록하고 사용자에게 보고 후 중단. 증상만 덮는 수정(assertion 완화, `skip`/`xfail`, 기대값 끼워 맞추기)은 실패로 간주.
+4. **Task 마무리**: 전부 통과하면 체크박스 `[x]` + 진행 로그 한 줄 갱신 → **Task 범위 파일만 명시적 경로로 `git add`**(`git add -A`·`git add .` 금지, 마이그레이션 파일 포함) → spec의 "커밋" 필드 메시지로 커밋. *(vibe-build 모드에서는 맨 위 「vibe-build 모드」 문단이 우선)*
+5. **다음 Task로 즉시 이동** (기본 모드) — Task 사이에서 멈추지 않는다. 보고는 전체 완료(또는 중단) 시 1회. `--one` 모드만 Task 1개 후 종료.
+
+### 3️⃣ 전체 통과 후 — 리팩토링 (유일한 추가 단계)
+
+1. 전체 테스트(`pytest`)를 한 번 돌려 최종 확인.
+2. **`backend/refactor --spec {NNN} --apply` 실행** — 이 spec의 커밋들이 변경한 파일 **전부**를 대상으로 리팩토링. 검토 로직은 refactor 스킬이 담당.
+3. 리팩토링 수정이 있으면 `pytest`를 **재실행**해 회귀 없음을 확인하고 `refactor: spec {NNN} 리팩토링` 메시지로 커밋. 수동 확인 필요 항목은 완료 보고에 포함.
+4. 상태를 `✅ 완료`로 갱신하고 (spec 문서 + `spec/README.md` 색인 줄 — 짝 문서가 아직 진행 중이면 색인 상태는 `🚧 진행중` 유지) spec 문서와 색인만 `chore: spec {NNN} 완료` 메시지로 마무리 커밋.
+
+### 4️⃣ 완료 보고
+
+전체 완료(또는 중단) 시 1회 출력:
+
+```
+## Spec 진행 현황: {spec 파일명}
+- 완료: {n} / {총} Tasks
+- Task별 결과: 번호 ✅/❌ + 테스트 개수 한 줄씩
+- 커밋: Task별 {짧은 해시} 목록
+- 리팩토링: 자동 적용 {n}건 (refactor 커밋 {짧은 해시}) / 수동 확인 필요 제안 {m}건
+```
+
+---
+
+## 금지 사항
+
+- ❌ spec에 없는 파일·기능·단계를 임의로 추가 (필요하면 spec 수정을 먼저 제안)
+- ❌ 테스트 실패/미실행 상태에서 체크박스 채우기·커밋
+- ❌ 테스트를 약화시켜 통과 (skip/xfail 처리, assertion 제거, 기대값을 실제값에 끼워 맞추기)
+- ❌ Task 순서 건너뛰기 (spec의 순서가 곧 실행 순서 — 묶음을 지정받았으면 그 묶음 안의 순서)
+- ❌ 지정받은 묶음 밖의 Task·공유 파일(`COMMON.md` §5) 수정
+- ❌ Task 범위 외 파일을 커밋에 포함 (`git add -A`·`git add .` 금지)
+- ❌ 리팩토링 단계(`backend/refactor --apply`)를 생략하고 spec 완료 처리 *(vibe-build 모드에서는 맨 위 「vibe-build 모드」 문단이 우선)*
+- ❌ push (사용자가 명시적으로 요청할 때만)
+- ❌ 열린 질문 미해소 상태로 구현 시작
+- ❌ data-model.yaml 과 다른 models.py, 스키마 검사(`schema-*`) 회피용 컬럼명 변경

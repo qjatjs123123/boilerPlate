@@ -1,0 +1,44 @@
+name: Garbage Collection
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 매주 월요일 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  gc:
+    name: Weekly Entropy Scan
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg2://app:unused@localhost:5432/app
+      JWT_SECRET: ci-only
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - run: cd backend && uv venv --python 3.12 && uv pip install -e ".[dev]"
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: bash scripts/gc/check.sh
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const title = `GC scan found issues — ${new Date().toISOString().slice(0, 10)}`;
+            const { data: open } = await github.rest.issues.listForRepo({ owner, repo, state: 'open', labels: 'garbage-collection' });
+            if (open.some(i => i.title === title)) return;
+            await github.rest.issues.create({
+              owner, repo, title, labels: ['garbage-collection'],
+              body: '주간 엔트로피 점검에서 문제가 발견됐습니다. 로컬에서 `make gc` 를 실행해 상세를 확인하세요.',
+            });
